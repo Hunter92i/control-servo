@@ -1,1 +1,49 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contrôle Servo Arduino</title>
+    <style>
+        body { font-family: sans-serif; text-align: center; padding: 50px; }
+        input[type=range] { width: 300px; }
+        .valeur { font-size: 24px; font-weight: bold; color: #333; }
+    </style>
+</head>
+<body>
 
+    <h1>Contrôle du Servo-Moteur</h1>
+    
+    <p>Déplacez le curseur pour bouger le moteur</p>
+    
+    <input type="range" min="0" max="180" value="0" id="servoSlider" oninput="updateAngle(this.value)" onchange="sendAngle(this.value)">
+    
+    <p>Angle actuel : <span id="displayAngle" class="valeur">0</span>°</p>
+
+    <script>
+        // Adresse de votre script Python (Localhost)
+        const API_URL = "http://127.0.0.1:5000/set-angle";
+
+        function updateAngle(val) {
+            document.getElementById('displayAngle').innerText = val;
+        }
+
+        async function sendAngle(val) {
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ angle: val })
+                });
+                console.log("Envoyé:", val);
+            } catch (error) {
+                console.error("Erreur de connexion au serveur Python:", error);
+                alert("Impossible de contacter le serveur Python. Vérifiez qu'il est lancé !");
+            }
+        }
+    </script>
+
+</body>
+</html>
