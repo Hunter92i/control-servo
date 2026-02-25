@@ -144,7 +144,7 @@
             select.innerHTML = ''; 
             
             if (ports.length === 0) {
-                select.add(new Option("Aucun port trouvé", ""));
+                select.add(new Option("No port found", ""));
             } else {
                 ports.forEach(p => {
                     // On affiche la description (ex: "Arduino Uno (COM3)")
@@ -155,9 +155,9 @@
                     select.add(opt);
                 });
             }
-            log(`Ports trouvés: ${ports.length}`);
+            log(`Ports found: ${ports.length}`);
         } catch (e) {
-            log("Erreur scan ports: " + e);
+            log("Scan ports error: " + e);
             select.innerHTML = '<option>Erreur API</option>';
         }
     }
@@ -167,7 +167,7 @@
         const selectedPort = portSelect.value;
 
         if (!selectedPort) {
-            alert("Sélectionnez un port valide !");
+            alert("Select a valid port !");
             return;
         }
 
@@ -185,13 +185,13 @@
                 // Affiche juste "Connected" ou "Connected (COM3)"
                 document.getElementById('connectionStatus').innerText = `Connected (${data.port})`;
                 document.getElementById('connectionStatus').className = "fw-bold text-success";
-                log("Succès : Arduino connecté.");
+                log("Success : Arduino is connected.");
             } else {
-                log("Echec connexion : " + data.error);
-                alert("Impossible de se connecter.");
+                log("Connexion failed : " + data.error);
+                alert("Impossible to connect.");
             }
         } catch (e) {
-            log("Erreur serveur : " + e);
+            log("Servor error : " + e);
         }
     }
 
@@ -202,11 +202,11 @@
         
         if (mode === "2") {
             selector.classList.remove('hidden');
-            log("Mode activé : Produit B (2 Moteurs)");
+            log("Activated Mode : Product B (2 Motors)");
         } else {
             selector.classList.add('hidden');
             document.getElementById('m1').checked = true; // Retour moteur 1 par défaut
-            log("Mode activé : Produit A (1 Moteur)");
+            log("Activated Mode : Product A (1 Motor)");
         }
     }
 
