@@ -25,12 +25,109 @@
         </select>
     </div>
 
-    <div class="card">
-        <div class="card-body d-flex align-items-center gap-3">
-            <button class="btn btn-outline-dark" onclick="connectArduino()">Connect</button>
-            <span id="connectionStatus" class="fw-bold text-danger">Not connected</span>
+<div class="card">
+        <div class="card-header">Connection Settings</div>
+        <div class="card-body">
+            <div class="row align-items-center">
+                <div class="col-auto">
+                    <label class="form-label fw-bold">Port:</label>
+                </div>
+                <div class="col-auto">
+                    <select id="portSelect" class="form-select" style="min-width: 120px;">
+                        <option value="">Scan...</option>
+                    </select>
+                </div>
+                <div class="col-auto">
+                    <button class="btn btn-outline-secondary" onclick="scanPorts()" title="Rafraîchir les ports">
+                        &#x21bb; </button>
+                </div>
+                <div class="col-auto">
+                    <button class="btn btn-outline-dark" onclick="connectArduino()">Connect</button>
+                </div>
+                <div class="col">
+                    <span id="connectionStatus" class="fw-bold text-danger">Not connected</span>
+                </div>
+            </div>
         </div>
     </div>
+
+<script>
+    const API_URL = "http://127.0.0.1:5000";
+    // ... autres variables ...
+
+    // Fonction lancée au chargement de la page
+    window.onload = function() {
+        scanPorts(); // Scan automatique au démarrage
+    };
+
+    // 1. Fonction pour SCANNER les ports
+    async function scanPorts() {
+        const select = document.getElementById('portSelect');
+        select.innerHTML = '<option>Scanning...</option>';
+        
+        try {
+            const res = await fetch(`${API_URL}/scan-ports`);
+            const ports = await res.json();
+            
+            select.innerHTML = ''; // Vider la liste
+            
+            if (ports.length === 0) {
+                const opt = document.createElement('option');
+                opt.text = "Aucun port";
+                select.add(opt);
+            } else {
+                ports.forEach(port => {
+                    const opt = document.createElement('option');
+                    opt.value = port;
+                    opt.text = port;
+                    select.add(opt);
+                });
+            }
+            log(`Ports trouvés: ${ports.join(', ')}`);
+        } catch (e) {
+            log("Erreur scan ports: " + e);
+            select.innerHTML = '<option>Erreur</option>';
+        }
+    }
+
+    // 2. Fonction CONNECT modifiée pour envoyer le port choisi
+    async function connectArduino() {
+        const portSelect = document.getElementById('portSelect');
+        const selectedPort = portSelect.value;
+
+        if (!selectedPort || selectedPort === "Aucun port") {
+            alert("Veuillez sélectionner un port valide !");
+            return;
+        }
+
+        try {
+            log(`Tentative de connexion sur ${selectedPort}...`);
+            
+            // On envoie le port dans le JSON
+            const res = await fetch(`${API_URL}/connect`, { 
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ port: selectedPort }) 
+            });
+            
+            const data = await res.json();
+            
+            if (data.connected) {
+                isConnected = true;
+                document.getElementById('connectionStatus').innerText = `Connected (${data.port})`;
+                document.getElementById('connectionStatus').classList.replace("text-danger", "text-success");
+                log("Arduino connecté avec succès.");
+            } else {
+                log("Erreur connexion: " + (data.error || "Inconnue"));
+                alert("Erreur de connexion. Vérifiez que le port n'est pas utilisé ailleurs.");
+            }
+        } catch (e) {
+            log("Erreur serveur Python: " + e);
+        }
+    }
+
+    // ... (Le reste des fonctions sendMove, startScan, etc. restent identiques) ...
+</script>
 
     <div class="card">
         <div class="card-header">Manual Control</div>
