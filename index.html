@@ -25,21 +25,20 @@
         </select>
     </div>
 
-<div class="card">
+    <div class="card">
         <div class="card-header">Connection Settings</div>
         <div class="card-body">
             <div class="row align-items-center">
+                <div class="col-auto"><label class="form-label fw-bold">Port:</label></div>
                 <div class="col-auto">
-                    <label class="form-label fw-bold">Port:</label>
-                </div>
-                <div class="col-auto">
-                    <select id="portSelect" class="form-select" style="min-width: 120px;">
+                    <select id="portSelect" class="form-select" style="min-width: 250px;">
                         <option value="">Scan...</option>
                     </select>
                 </div>
                 <div class="col-auto">
-                    <button class="btn btn-outline-secondary" onclick="scanPorts()" title="Rafraîchir les ports">
-                        &#x21bb; </button>
+                    <button class="btn btn-outline-secondary" onclick="scanPorts()" title="Refresh">
+                        &#x21bb;
+                    </button>
                 </div>
                 <div class="col-auto">
                     <button class="btn btn-outline-dark" onclick="connectArduino()">Connect</button>
@@ -50,84 +49,6 @@
             </div>
         </div>
     </div>
-
-<script>
-    const API_URL = "http://127.0.0.1:5000";
-    // ... autres variables ...
-
-    // Fonction lancée au chargement de la page
-    window.onload = function() {
-        scanPorts(); // Scan automatique au démarrage
-    };
-
-    // 1. Fonction pour SCANNER les ports
-    async function scanPorts() {
-        const select = document.getElementById('portSelect');
-        select.innerHTML = '<option>Scanning...</option>';
-        
-        try {
-            const res = await fetch(`${API_URL}/scan-ports`);
-            const ports = await res.json();
-            
-            select.innerHTML = ''; // Vider la liste
-            
-            if (ports.length === 0) {
-                const opt = document.createElement('option');
-                opt.text = "Aucun port";
-                select.add(opt);
-            } else {
-                ports.forEach(port => {
-                    const opt = document.createElement('option');
-                    opt.value = port;
-                    opt.text = port;
-                    select.add(opt);
-                });
-            }
-            log(`Ports trouvés: ${ports.join(', ')}`);
-        } catch (e) {
-            log("Erreur scan ports: " + e);
-            select.innerHTML = '<option>Erreur</option>';
-        }
-    }
-
-    // 2. Fonction CONNECT modifiée pour envoyer le port choisi
-    async function connectArduino() {
-        const portSelect = document.getElementById('portSelect');
-        const selectedPort = portSelect.value;
-
-        if (!selectedPort || selectedPort === "Aucun port") {
-            alert("Veuillez sélectionner un port valide !");
-            return;
-        }
-
-        try {
-            log(`Tentative de connexion sur ${selectedPort}...`);
-            
-            // On envoie le port dans le JSON
-            const res = await fetch(`${API_URL}/connect`, { 
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ port: selectedPort }) 
-            });
-            
-            const data = await res.json();
-            
-            if (data.connected) {
-                isConnected = true;
-                document.getElementById('connectionStatus').innerText = `Connected (${data.port})`;
-                document.getElementById('connectionStatus').classList.replace("text-danger", "text-success");
-                log("Arduino connecté avec succès.");
-            } else {
-                log("Erreur connexion: " + (data.error || "Inconnue"));
-                alert("Erreur de connexion. Vérifiez que le port n'est pas utilisé ailleurs.");
-            }
-        } catch (e) {
-            log("Erreur serveur Python: " + e);
-        }
-    }
-
-    // ... (Le reste des fonctions sendMove, startScan, etc. restent identiques) ...
-</script>
 
     <div class="card">
         <div class="card-header">Manual Control</div>
@@ -148,9 +69,7 @@
             </div>
 
             <div class="row align-items-center">
-                <div class="col-auto">
-                    <label class="form-label fw-bold">Target angle (0–180°):</label>
-                </div>
+                <div class="col-auto"><label class="form-label fw-bold">Target angle (0–180°):</label></div>
                 <div class="col">
                     <input type="number" id="targetAngle" class="form-control" value="0" min="0" max="180">
                 </div>
@@ -166,27 +85,19 @@
         <div class="card-body">
             <div class="mb-3 row">
                 <label class="col-sm-4 col-form-label fw-bold">Step size (deg/step):</label>
-                <div class="col-sm-3">
-                    <input type="number" id="stepSize" class="form-control" value="5">
-                </div>
-                <div class="col-sm-auto">
-                    <button class="btn btn-light border btn-sm mt-1">Set step</button>
-                </div>
+                <div class="col-sm-3"><input type="number" id="stepSize" class="form-control" value="5"></div>
+                <div class="col-sm-auto"><button class="btn btn-light border btn-sm mt-1">Set step</button></div>
             </div>
             <div class="row">
                 <label class="col-sm-4 col-form-label fw-bold">Time between steps (ms):</label>
-                <div class="col-sm-3">
-                    <input type="number" id="stepTime" class="form-control" value="500">
-                </div>
-                <div class="col-sm-auto">
-                    <button class="btn btn-light border btn-sm mt-1">Set interval</button>
-                </div>
+                <div class="col-sm-3"><input type="number" id="stepTime" class="form-control" value="500"></div>
+                <div class="col-sm-auto"><button class="btn btn-light border btn-sm mt-1">Set interval</button></div>
             </div>
         </div>
     </div>
 
     <div class="card">
-        <div class="card-body d-flex gap-2">
+        <div class="card-body d-flex gap-2 flex-wrap">
             <button class="btn btn-outline-success" onclick="startScan()">Run</button>
             <button class="btn btn-outline-danger" onclick="stopScan()">Stop</button>
             <button class="btn btn-outline-secondary" onclick="stepOnce()">Step once</button>
@@ -217,18 +128,85 @@
     let scanInterval = null;
     let isConnected = false;
 
-    // --- GESTION 1 vs 2 MOTEURS ---
+    window.onload = function() {
+        scanPorts();
+    };
+
+    // --- 1. GESTION DES PORTS (Nouveau) ---
+    async function scanPorts() {
+        const select = document.getElementById('portSelect');
+        select.innerHTML = '<option>Scanning...</option>';
+        
+        try {
+            const res = await fetch(`${API_URL}/scan-ports`);
+            const ports = await res.json(); // Reçoit maintenant [{device: "COM3", description: "Arduino..."}, ...]
+            
+            select.innerHTML = ''; 
+            
+            if (ports.length === 0) {
+                select.add(new Option("Aucun port trouvé", ""));
+            } else {
+                ports.forEach(p => {
+                    // On affiche la description (ex: "Arduino Uno (COM3)")
+                    // Mais on envoie la valeur technique (ex: "COM3")
+                    const opt = document.createElement('option');
+                    opt.value = p.device;
+                    opt.text = p.description; 
+                    select.add(opt);
+                });
+            }
+            log(`Ports trouvés: ${ports.length}`);
+        } catch (e) {
+            log("Erreur scan ports: " + e);
+            select.innerHTML = '<option>Erreur API</option>';
+        }
+    }
+
+    async function connectArduino() {
+        const portSelect = document.getElementById('portSelect');
+        const selectedPort = portSelect.value;
+
+        if (!selectedPort) {
+            alert("Sélectionnez un port valide !");
+            return;
+        }
+
+        try {
+            log(`Connexion à ${selectedPort}...`);
+            const res = await fetch(`${API_URL}/connect`, { 
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ port: selectedPort }) 
+            });
+            const data = await res.json();
+            
+            if (data.connected) {
+                isConnected = true;
+                // Affiche juste "Connected" ou "Connected (COM3)"
+                document.getElementById('connectionStatus').innerText = `Connected (${data.port})`;
+                document.getElementById('connectionStatus').className = "fw-bold text-success";
+                log("Succès : Arduino connecté.");
+            } else {
+                log("Echec connexion : " + data.error);
+                alert("Impossible de se connecter.");
+            }
+        } catch (e) {
+            log("Erreur serveur : " + e);
+        }
+    }
+
+    // --- 2. GESTION PRODUITS (Bug corrigé) ---
     function toggleMotorMode() {
         const mode = document.getElementById('productMode').value;
         const selector = document.getElementById('motorSelectorDiv');
+        
         if (mode === "2") {
             selector.classList.remove('hidden');
-            log("Mode: Produit B (2 Moteurs) activé");
+            log("Mode activé : Produit B (2 Moteurs)");
         } else {
             selector.classList.add('hidden');
-            // Force la sélection sur moteur 1 en interne
-            document.getElementById('m1').checked = true;
-            log("Mode: Produit A (1 Moteur) activé");
+            document.getElementById('m1').checked = true; // Retour moteur 1 par défaut
+            log("Mode activé : Produit A (1 Moteur)");
         }
     }
 
@@ -240,32 +218,11 @@
         return 1;
     }
 
-    // --- COMM API ---
-    async function connectArduino() {
-        try {
-            log("Tentative de connexion...");
-            const res = await fetch(`${API_URL}/connect`, { method: 'POST' });
-            const data = await res.json();
-            if (data.connected) {
-                isConnected = true;
-                document.getElementById('connectionStatus').innerText = "Connected";
-                document.getElementById('connectionStatus').classList.replace("text-danger", "text-success");
-                log("Arduino connecté avec succès.");
-            } else {
-                log("Erreur: Impossible de connecter l'Arduino.");
-            }
-        } catch (e) {
-            log("Erreur serveur Python: " + e);
-        }
-    }
-
+    // --- 3. COMMANDES ---
     async function sendMove(angle) {
-        if (!isConnected) {
-            log("Erreur: Non connecté."); 
-            return;
-        }
-        const motorId = getSelectedMotor();
+        if (!isConnected) { log("Erreur: Non connecté"); return; }
         
+        const motorId = getSelectedMotor();
         try {
             await fetch(`${API_URL}/move`, {
                 method: 'POST',
@@ -274,50 +231,41 @@
             });
             currentAngle = angle;
             document.getElementById('currentAngleDisplay').innerText = currentAngle;
-        } catch (e) {
-            log("Erreur communication: " + e);
-        }
+        } catch (e) { log("Erreur envoi: " + e); }
     }
 
-    // --- LOGIQUE METIER ---
     function setAngleManual() {
         const angle = parseInt(document.getElementById('targetAngle').value);
-        log(`Action: Set angle à ${angle}°`);
+        log(`Action: Set ${angle}°`);
         sendMove(angle);
     }
 
     function resetZero() {
         stopScan();
-        log("Action: Reset à 0°");
+        log("Action: Reset 0°");
         document.getElementById('targetAngle').value = 0;
         sendMove(0);
     }
 
     function stepOnce() {
         const step = parseInt(document.getElementById('stepSize').value);
-        let nextAngle = currentAngle + step;
-        if (nextAngle > 180) nextAngle = 0; // Boucle ou stop, au choix
-        
-        log(`Action: Step (+${step}°) -> ${nextAngle}°`);
-        sendMove(nextAngle);
+        let next = currentAngle + step;
+        if (next > 180) next = 0;
+        sendMove(next);
     }
 
     function startScan() {
-        if (scanInterval) return; // Déjà en cours
-        
+        if (scanInterval) return;
         const timeMs = parseInt(document.getElementById('stepTime').value);
         const step = parseInt(document.getElementById('stepSize').value);
         
-        log(`Action: Start Scan (Step: ${step}, Time: ${timeMs}ms)`);
+        log("Scan démarré...");
         document.getElementById('stateDisplay').innerText = "RUNNING";
         
         scanInterval = setInterval(() => {
-            let nextAngle = currentAngle + step;
-            if (nextAngle > 180) {
-                nextAngle = 0; // Reset au début
-                log("Scan: retour à 0°");
-            }
-            sendMove(nextAngle);
+            let next = currentAngle + step;
+            if (next > 180) { next = 0; log("Scan: boucle"); }
+            sendMove(next);
         }, timeMs);
     }
 
@@ -326,14 +274,15 @@
             clearInterval(scanInterval);
             scanInterval = null;
             document.getElementById('stateDisplay').innerText = "IDLE";
-            log("Action: Stop Scan");
+            log("Scan stoppé.");
         }
     }
 
     function log(msg) {
+        const d = new Date();
+        const time = d.getHours() + ":" + d.getMinutes() + ":" + d.getSeconds();
         const logArea = document.getElementById('logArea');
-        const time = new Date().toLocaleTimeString();
-        logArea.innerHTML += `<div>[${time}] ${msg}</div>`;
+        logArea.innerHTML += `<div><small>[${time}]</small> ${msg}</div>`;
         logArea.scrollTop = logArea.scrollHeight;
     }
 </script>
