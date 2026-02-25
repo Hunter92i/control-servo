@@ -3,47 +3,243 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Contrôle Servo Arduino</title>
+    <title>Arduino Servo Controller</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        body { font-family: sans-serif; text-align: center; padding: 50px; }
-        input[type=range] { width: 300px; }
-        .valeur { font-size: 24px; font-weight: bold; color: #333; }
+        body { background-color: #f8f9fa; padding: 20px; font-family: 'Segoe UI', sans-serif; }
+        .card { margin-bottom: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .card-header { font-weight: bold; background-color: #fff; border-bottom: 1px solid #eee; }
+        .log-window { height: 150px; overflow-y: auto; background: #fdfdfd; border: 1px solid #ddd; padding: 10px; font-family: monospace; font-size: 0.9em; }
+        .hidden { display: none; }
     </style>
 </head>
 <body>
 
-    <h1>Contrôle du Servo-Moteur</h1>
+<div class="container" style="max-width: 800px;">
     
-    <p>Déplacez le curseur pour bouger le moteur</p>
-    
-    <input type="range" min="0" max="180" value="0" id="servoSlider" oninput="updateAngle(this.value)" onchange="sendAngle(this.value)">
-    
-    <p>Angle actuel : <span id="displayAngle" class="valeur">0</span>°</p>
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>Arduino Servo Controller</h2>
+        <select id="productMode" class="form-select w-auto" onchange="toggleMotorMode()">
+            <option value="1">Produit A (1 Moteur)</option>
+            <option value="2">Produit B (2 Moteurs)</option>
+        </select>
+    </div>
 
-    <script>
-        // Adresse de votre script Python (Localhost)
-        const API_URL = "http://127.0.0.1:5000/set-angle";
+    <div class="card">
+        <div class="card-body d-flex align-items-center gap-3">
+            <button class="btn btn-outline-dark" onclick="connectArduino()">Connect</button>
+            <span id="connectionStatus" class="fw-bold text-danger">Not connected</span>
+        </div>
+    </div>
 
-        function updateAngle(val) {
-            document.getElementById('displayAngle').innerText = val;
+    <div class="card">
+        <div class="card-header">Manual Control</div>
+        <div class="card-body">
+            
+            <div id="motorSelectorDiv" class="mb-3 hidden">
+                <label class="form-label fw-bold">Select Motor:</label>
+                <div class="btn-group" role="group">
+                    <input type="radio" class="btn-check" name="motorSelect" id="m1" value="1" checked>
+                    <label class="btn btn-outline-primary" for="m1">Motor 1</label>
+
+                    <input type="radio" class="btn-check" name="motorSelect" id="m2" value="2">
+                    <label class="btn btn-outline-primary" for="m2">Motor 2</label>
+
+                    <input type="radio" class="btn-check" name="motorSelect" id="m3" value="3">
+                    <label class="btn btn-outline-primary" for="m3">Both (Sync)</label>
+                </div>
+            </div>
+
+            <div class="row align-items-center">
+                <div class="col-auto">
+                    <label class="form-label fw-bold">Target angle (0–180°):</label>
+                </div>
+                <div class="col">
+                    <input type="number" id="targetAngle" class="form-control" value="0" min="0" max="180">
+                </div>
+                <div class="col-auto">
+                    <button class="btn btn-light border" onclick="setAngleManual()">Set angle</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">Scan Parameters</div>
+        <div class="card-body">
+            <div class="mb-3 row">
+                <label class="col-sm-4 col-form-label fw-bold">Step size (deg/step):</label>
+                <div class="col-sm-3">
+                    <input type="number" id="stepSize" class="form-control" value="5">
+                </div>
+                <div class="col-sm-auto">
+                    <button class="btn btn-light border btn-sm mt-1">Set step</button>
+                </div>
+            </div>
+            <div class="row">
+                <label class="col-sm-4 col-form-label fw-bold">Time between steps (ms):</label>
+                <div class="col-sm-3">
+                    <input type="number" id="stepTime" class="form-control" value="500">
+                </div>
+                <div class="col-sm-auto">
+                    <button class="btn btn-light border btn-sm mt-1">Set interval</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body d-flex gap-2">
+            <button class="btn btn-outline-success" onclick="startScan()">Run</button>
+            <button class="btn btn-outline-danger" onclick="stopScan()">Stop</button>
+            <button class="btn btn-outline-secondary" onclick="stepOnce()">Step once</button>
+            <button class="btn btn-outline-secondary" onclick="resetZero()">Reset to 0°</button>
+            <button class="btn btn-light border" onclick="log('Status refreshed')">Refresh state</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <div class="fw-bold">Current angle: <span id="currentAngleDisplay">0</span>°</div>
+            <div class="fw-bold">State: <span id="stateDisplay">IDLE</span></div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">Log</div>
+        <div class="card-body p-0">
+            <div id="logArea" class="log-window"></div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    const API_URL = "http://127.0.0.1:5000";
+    let currentAngle = 0;
+    let scanInterval = null;
+    let isConnected = false;
+
+    // --- GESTION 1 vs 2 MOTEURS ---
+    function toggleMotorMode() {
+        const mode = document.getElementById('productMode').value;
+        const selector = document.getElementById('motorSelectorDiv');
+        if (mode === "2") {
+            selector.classList.remove('hidden');
+            log("Mode: Produit B (2 Moteurs) activé");
+        } else {
+            selector.classList.add('hidden');
+            // Force la sélection sur moteur 1 en interne
+            document.getElementById('m1').checked = true;
+            log("Mode: Produit A (1 Moteur) activé");
         }
+    }
 
-        async function sendAngle(val) {
-            try {
-                const response = await fetch(API_URL, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ angle: val })
-                });
-                console.log("Envoyé:", val);
-            } catch (error) {
-                console.error("Erreur de connexion au serveur Python:", error);
-                alert("Impossible de contacter le serveur Python. Vérifiez qu'il est lancé !");
+    function getSelectedMotor() {
+        const radios = document.getElementsByName('motorSelect');
+        for (let r of radios) {
+            if (r.checked) return parseInt(r.value);
+        }
+        return 1;
+    }
+
+    // --- COMM API ---
+    async function connectArduino() {
+        try {
+            log("Tentative de connexion...");
+            const res = await fetch(`${API_URL}/connect`, { method: 'POST' });
+            const data = await res.json();
+            if (data.connected) {
+                isConnected = true;
+                document.getElementById('connectionStatus').innerText = "Connected";
+                document.getElementById('connectionStatus').classList.replace("text-danger", "text-success");
+                log("Arduino connecté avec succès.");
+            } else {
+                log("Erreur: Impossible de connecter l'Arduino.");
             }
+        } catch (e) {
+            log("Erreur serveur Python: " + e);
         }
-    </script>
+    }
+
+    async function sendMove(angle) {
+        if (!isConnected) {
+            log("Erreur: Non connecté."); 
+            return;
+        }
+        const motorId = getSelectedMotor();
+        
+        try {
+            await fetch(`${API_URL}/move`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ motor_id: motorId, angle: angle })
+            });
+            currentAngle = angle;
+            document.getElementById('currentAngleDisplay').innerText = currentAngle;
+        } catch (e) {
+            log("Erreur communication: " + e);
+        }
+    }
+
+    // --- LOGIQUE METIER ---
+    function setAngleManual() {
+        const angle = parseInt(document.getElementById('targetAngle').value);
+        log(`Action: Set angle à ${angle}°`);
+        sendMove(angle);
+    }
+
+    function resetZero() {
+        stopScan();
+        log("Action: Reset à 0°");
+        document.getElementById('targetAngle').value = 0;
+        sendMove(0);
+    }
+
+    function stepOnce() {
+        const step = parseInt(document.getElementById('stepSize').value);
+        let nextAngle = currentAngle + step;
+        if (nextAngle > 180) nextAngle = 0; // Boucle ou stop, au choix
+        
+        log(`Action: Step (+${step}°) -> ${nextAngle}°`);
+        sendMove(nextAngle);
+    }
+
+    function startScan() {
+        if (scanInterval) return; // Déjà en cours
+        
+        const timeMs = parseInt(document.getElementById('stepTime').value);
+        const step = parseInt(document.getElementById('stepSize').value);
+        
+        log(`Action: Start Scan (Step: ${step}, Time: ${timeMs}ms)`);
+        document.getElementById('stateDisplay').innerText = "RUNNING";
+        
+        scanInterval = setInterval(() => {
+            let nextAngle = currentAngle + step;
+            if (nextAngle > 180) {
+                nextAngle = 0; // Reset au début
+                log("Scan: retour à 0°");
+            }
+            sendMove(nextAngle);
+        }, timeMs);
+    }
+
+    function stopScan() {
+        if (scanInterval) {
+            clearInterval(scanInterval);
+            scanInterval = null;
+            document.getElementById('stateDisplay').innerText = "IDLE";
+            log("Action: Stop Scan");
+        }
+    }
+
+    function log(msg) {
+        const logArea = document.getElementById('logArea');
+        const time = new Date().toLocaleTimeString();
+        logArea.innerHTML += `<div>[${time}] ${msg}</div>`;
+        logArea.scrollTop = logArea.scrollHeight;
+    }
+</script>
 
 </body>
 </html>
