@@ -47,3 +47,314 @@
             </div>
         </div>
     </div>
+
+    <div class="card">
+        <div class="card-header">Manual Control</div>
+        <div class="card-body">
+            
+            <div id="motorSelectorDiv" class="mb-3 hidden">
+                <label class="form-label fw-bold">Select Motor:</label>
+                <div class="btn-group" role="group">
+                    <input type="radio" class="btn-check" name="motorSelect" id="m1" value="1" checked onchange="updateInterfaceForMotor()">
+                    <label class="btn btn-outline-primary" for="m1">Servo (Motor 1)</label>
+
+                    <input type="radio" class="btn-check" name="motorSelect" id="m2" value="2" onchange="updateInterfaceForMotor()">
+                    <label class="btn btn-outline-primary" for="m2">DC Motor (Motor 2)</label>
+                </div>
+            </div>
+
+            <div class="row align-items-center">
+                <div class="col-auto">
+                    <label id="targetLabel" class="form-label fw-bold">Target angle (0–180°):</label>
+                </div>
+                <div class="col">
+                    <input type="number" id="targetValue" class="form-control" value="0" min="0" max="180">
+                </div>
+                <div class="col-auto">
+                    <button class="btn btn-light border" onclick="setMotorValue()">Send Command</button>
+                </div>
+            </div>
+
+            <div class="row align-items-center mt-3 hidden" id="dcAngleControl">
+                <div class="col-auto">
+                    <label class="form-label fw-bold text-primary">Target relative angle (°):</label>
+                </div>
+                <div class="col">
+                    <input type="number" id="dcTargetAngle" class="form-control" value="90" placeholder="Ex: 90 or -90">
+                </div>
+                <div class="col-auto">
+                    <button class="btn btn-primary" onclick="setRelativeAngleDC()">Run by Angle</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card" id="scanCard">
+        <div class="card-header">Scan / Auto Parameters</div>
+        <div class="card-body">
+            <div class="mb-3 row">
+                <label class="col-sm-4 col-form-label fw-bold">Step size / Increment:</label>
+                <div class="col-sm-3"><input type="number" id="stepSize" class="form-control" value="5"></div>
+            </div>
+            <div class="row">
+                <label class="col-sm-4 col-form-label fw-bold">Time between steps (ms):</label>
+                <div class="col-sm-3"><input type="number" id="stepTime" class="form-control" value="500"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body d-flex gap-2 flex-wrap">
+            <button class="btn btn-outline-success" id="btnRun" onclick="startScan()">Run (Auto)</button>
+            <button class="btn btn-outline-danger" id="btnStopScan" onclick="stopScan()">Stop Auto</button>
+            <button class="btn btn-outline-secondary" id="btnStep" onclick="stepOnce()">Step once</button>
+            
+            <button class="btn btn-outline-danger" onclick="resetZero()">Stop Motor / Reset to 0</button>
+            <button class="btn btn-light border" onclick="log('Status refreshed')">Refresh state</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <div class="fw-bold">Current value: <span id="currentAngleDisplay">0</span></div>
+            <div class="fw-bold">State: <span id="stateDisplay">IDLE</span></div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">Log</div>
+        <div class="card-body p-0">
+            <div id="logArea" class="log-window"></div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    const API_URL = "http://127.0.0.1:5000";
+    let currentValue = 0;
+    let scanInterval = null;
+    let isConnected = false;
+
+    window.onload = function() {
+        scanPorts();
+        updateInterfaceForMotor();
+    };
+
+    // --- 1. PORT MANAGEMENT ---
+    async function scanPorts() {
+        const select = document.getElementById('portSelect');
+        select.innerHTML = '<option>Scanning...</option>';
+        try {
+            const res = await fetch(`${API_URL}/scan-ports`);
+            const ports = await res.json();
+            select.innerHTML = ''; 
+            if (ports.length === 0) {
+                select.add(new Option("No port found", ""));
+            } else {
+                ports.forEach(p => {
+                    const opt = document.createElement('option');
+                    opt.value = p.device;
+                    opt.text = p.description; 
+                    select.add(opt);
+                });
+            }
+        } catch (e) {
+            log("Error scanning ports: " + e);
+            select.innerHTML = '<option>API Error</option>';
+        }
+    }
+
+    async function connectArduino() {
+        const portSelect = document.getElementById('portSelect');
+        const selectedPort = portSelect.value;
+        if (!selectedPort) { alert("Please select a valid port!"); return; }
+
+        try {
+            log(`Connecting to ${selectedPort}...`);
+            const res = await fetch(`${API_URL}/connect`, { 
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ port: selectedPort }) 
+            });
+            const data = await res.json();
+            if (data.connected) {
+                isConnected = true;
+                document.getElementById('connectionStatus').innerText = `Connected (${data.port})`;
+                document.getElementById('connectionStatus').className = "fw-bold text-success";
+                log("Success: Arduino connected.");
+            } else {
+                log("Connection failed: " + data.error);
+            }
+        } catch (e) { log("Server error: " + e); }
+    }
+
+    // --- 2. INTERFACE MANAGEMENT ---
+    function toggleMotorMode() {
+        const mode = document.getElementById('productMode').value;
+        const selector = document.getElementById('motorSelectorDiv');
+        
+        if (mode === "2") {
+            selector.classList.remove('hidden');
+            log("Mode activated: Product B (Servo + DC)");
+        } else {
+            selector.classList.add('hidden');
+            document.getElementById('m1').checked = true;
+            log("Mode activated: Product A (1 Servo)");
+        }
+        updateInterfaceForMotor(); 
+    }
+
+    function getSelectedMotor() {
+        const radios = document.getElementsByName('motorSelect');
+        for (let r of radios) {
+            if (r.checked) return parseInt(r.value);
+        }
+        return 1;
+    }
+
+    function updateInterfaceForMotor() {
+        const motorId = getSelectedMotor();
+        
+        // UI Elements
+        const label = document.getElementById('targetLabel');
+        const input = document.getElementById('targetValue');
+        const dcAngleControl = document.getElementById('dcAngleControl');
+        
+        const scanCard = document.getElementById('scanCard');
+        const btnRun = document.getElementById('btnRun');
+        const btnStopScan = document.getElementById('btnStopScan');
+        const btnStep = document.getElementById('btnStep');
+
+        if (motorId === 1) {
+            // --- SERVO MOTOR ---
+            label.innerText = "Target angle (0–180°):";
+            input.min = 0;
+            input.max = 180;
+            if (input.value < 0) input.value = 0;
+            if (input.value > 180) input.value = 180;
+            
+            // Show Scan, Hide DC Control
+            scanCard.classList.remove('hidden');
+            btnRun.classList.remove('hidden');
+            btnStopScan.classList.remove('hidden');
+            btnStep.classList.remove('hidden');
+            dcAngleControl.classList.add('hidden');
+            
+        } else if (motorId === 2) {
+            // --- DC MOTOR ---
+            label.innerText = "Target speed (-255 to 255):";
+            input.min = -255;
+            input.max = 255;
+            
+            // Hide Scan, Show DC Control
+            scanCard.classList.add('hidden');
+            btnRun.classList.add('hidden');
+            btnStopScan.classList.add('hidden');
+            btnStep.classList.add('hidden');
+            dcAngleControl.classList.remove('hidden');
+            
+            stopScan(); // Safety feature
+        }
+    }
+
+    // --- 3. COMMANDS ---
+    async function sendMove(val) {
+        if (!isConnected) { log("Error: Not connected"); return; }
+        
+        const motorId = getSelectedMotor();
+        try {
+            await fetch(`${API_URL}/move`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ motor_id: motorId, angle: val }) 
+            });
+            currentValue = val;
+            document.getElementById('currentAngleDisplay').innerText = currentValue;
+        } catch (e) { log("Send error: " + e); }
+    }
+
+    function setMotorValue() {
+        const val = parseInt(document.getElementById('targetValue').value);
+        const motorId = getSelectedMotor();
+        const type = motorId === 1 ? "Angle" : "Speed";
+        log(`Action: Set ${type} to ${val}`);
+        sendMove(val);
+    }
+
+    // Special command for DC rotation logic
+    async function setRelativeAngleDC() {
+        if (!isConnected) { log("Error: Not connected"); return; }
+        
+        const targetAngleDC = parseInt(document.getElementById('dcTargetAngle').value);
+        log(`Action: Requesting DC rotation of ${targetAngleDC}°...`);
+        
+        try {
+            await fetch(`${API_URL}/move`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ motor_id: 2, target_angle_dc: targetAngleDC }) 
+            });
+        } catch (e) { log("Error sending DC Angle: " + e); }
+    }
+
+    function resetZero() {
+        stopScan();
+        log("Action: Stop / Reset to 0");
+        document.getElementById('targetValue').value = 0;
+        sendMove(0);
+    }
+
+    function stepOnce() {
+        const step = parseInt(document.getElementById('stepSize').value);
+        const motorId = getSelectedMotor();
+        const maxVal = motorId === 1 ? 180 : 255;
+        
+        let next = currentValue + step;
+        if (next > maxVal) next = motorId === 1 ? 0 : maxVal;
+        
+        sendMove(next);
+    }
+
+    function startScan() {
+        if (scanInterval) return;
+        const timeMs = parseInt(document.getElementById('stepTime').value);
+        const step = parseInt(document.getElementById('stepSize').value);
+        const motorId = getSelectedMotor();
+        const maxVal = motorId === 1 ? 180 : 255;
+        
+        log("Scan started...");
+        document.getElementById('stateDisplay').innerText = "RUNNING";
+        
+        scanInterval = setInterval(() => {
+            let next = currentValue + step;
+            if (next > maxVal) { 
+                next = motorId === 1 ? 0 : maxVal; 
+                log("Scan: loop");
+            }
+            sendMove(next);
+        }, timeMs);
+    }
+
+    function stopScan() {
+        if (scanInterval) {
+            clearInterval(scanInterval);
+            scanInterval = null;
+            document.getElementById('stateDisplay').innerText = "IDLE";
+            log("Scan stopped.");
+        }
+    }
+
+    function log(msg) {
+        const d = new Date();
+        const time = d.getHours().toString().padStart(2, '0') + ":" + 
+                     d.getMinutes().toString().padStart(2, '0') + ":" + 
+                     d.getSeconds().toString().padStart(2, '0');
+        const logArea = document.getElementById('logArea');
+        logArea.innerHTML += `<div><small>[${time}]</small> ${msg}</div>`;
+        logArea.scrollTop = logArea.scrollHeight;
+    }
+</script>
+
+</body>
+</html>
