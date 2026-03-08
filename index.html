@@ -10,7 +10,7 @@
         .card { margin-bottom: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
         .card-header { font-weight: bold; background-color: #fff; border-bottom: 1px solid #eee; }
         .log-window { height: 150px; overflow-y: auto; background: #fdfdfd; border: 1px solid #ddd; padding: 10px; font-family: monospace; font-size: 0.9em; }
-        .hidden { display: none; }
+        .hidden { display: none !important; } /* Le !important assure que l'élément disparait bien */
     </style>
 </head>
 <body>
@@ -36,9 +36,7 @@
                     </select>
                 </div>
                 <div class="col-auto">
-                    <button class="btn btn-outline-secondary" onclick="scanPorts()" title="Refresh">
-                        &#x21bb;
-                    </button>
+                    <button class="btn btn-outline-secondary" onclick="scanPorts()" title="Refresh">&#x21bb;</button>
                 </div>
                 <div class="col-auto">
                     <button class="btn btn-outline-dark" onclick="connectArduino()">Connect</button>
@@ -79,7 +77,7 @@
         </div>
     </div>
 
-    <div class="card">
+    <div class="card" id="scanCard">
         <div class="card-header">Scan / Auto Parameters</div>
         <div class="card-body">
             <div class="mb-3 row">
@@ -95,10 +93,11 @@
 
     <div class="card">
         <div class="card-body d-flex gap-2 flex-wrap">
-            <button class="btn btn-outline-success" onclick="startScan()">Run (Auto)</button>
-            <button class="btn btn-outline-danger" onclick="stopScan()">Stop</button>
-            <button class="btn btn-outline-secondary" onclick="stepOnce()">Step once</button>
-            <button class="btn btn-outline-secondary" onclick="resetZero()">Stop / Reset to 0</button>
+            <button class="btn btn-outline-success" id="btnRun" onclick="startScan()">Run (Auto)</button>
+            <button class="btn btn-outline-danger" id="btnStopScan" onclick="stopScan()">Stop Auto</button>
+            <button class="btn btn-outline-secondary" id="btnStep" onclick="stepOnce()">Step once</button>
+            
+            <button class="btn btn-outline-danger" onclick="resetZero()">Stop Motor / Reset to 0</button>
             <button class="btn btn-light border" onclick="log('Status refreshed')">Refresh state</button>
         </div>
     </div>
@@ -178,7 +177,7 @@
         } catch (e) { log("Erreur serveur : " + e); }
     }
 
-    // --- 2. GESTION DE L'INTERFACE (Servo vs DC) ---
+    // --- 2. GESTION DE L'INTERFACE ---
     function toggleMotorMode() {
         const mode = document.getElementById('productMode').value;
         const selector = document.getElementById('motorSelectorDiv');
@@ -189,9 +188,9 @@
         } else {
             selector.classList.add('hidden');
             document.getElementById('m1').checked = true;
-            updateInterfaceForMotor();
             log("Mode activé : Produit A (1 Servo)");
         }
+        updateInterfaceForMotor(); // Mise à jour de l'affichage
     }
 
     function getSelectedMotor() {
@@ -206,17 +205,41 @@
         const motorId = getSelectedMotor();
         const label = document.getElementById('targetLabel');
         const input = document.getElementById('targetValue');
+        
+        // Eléments spécifiques au scan
+        const scanCard = document.getElementById('scanCard');
+        const btnRun = document.getElementById('btnRun');
+        const btnStopScan = document.getElementById('btnStopScan');
+        const btnStep = document.getElementById('btnStep');
 
         if (motorId === 1) {
+            // --- SERVO MOTEUR ---
             label.innerText = "Target angle (0–180°):";
             input.min = 0;
             input.max = 180;
             if (input.value < 0) input.value = 0;
             if (input.value > 180) input.value = 180;
+            
+            // Afficher les éléments de scan
+            scanCard.classList.remove('hidden');
+            btnRun.classList.remove('hidden');
+            btnStopScan.classList.remove('hidden');
+            btnStep.classList.remove('hidden');
+            
         } else if (motorId === 2) {
+            // --- MOTEUR DC ---
             label.innerText = "Target speed (-255 to 255):";
             input.min = -255;
             input.max = 255;
+            
+            // Cacher les éléments de scan
+            scanCard.classList.add('hidden');
+            btnRun.classList.add('hidden');
+            btnStopScan.classList.add('hidden');
+            btnStep.classList.add('hidden');
+            
+            // Arrêter le scan s'il était en cours
+            stopScan();
         }
     }
 
@@ -229,7 +252,7 @@
             await fetch(`${API_URL}/move`, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ motor_id: motorId, angle: val }) // 'angle' est conservé comme nom de variable pour le Python
+                body: JSON.stringify({ motor_id: motorId, angle: val }) 
             });
             currentValue = val;
             document.getElementById('currentAngleDisplay').innerText = currentValue;
@@ -269,15 +292,14 @@
         const motorId = getSelectedMotor();
         const maxVal = motorId === 1 ? 180 : 255;
         
-        log("Scan / Accélération démarré...");
+        log("Scan / Auto démarré...");
         document.getElementById('stateDisplay').innerText = "RUNNING";
         
         scanInterval = setInterval(() => {
             let next = currentValue + step;
             if (next > maxVal) { 
                 next = motorId === 1 ? 0 : maxVal; 
-                if (motorId === 2) log("Vitesse max atteinte.");
-                else log("Scan: boucle");
+                log("Scan: boucle");
             }
             sendMove(next);
         }, timeMs);
