@@ -20,8 +20,8 @@
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h2>Arduino Motor Controller</h2>
         <select id="productMode" class="form-select w-auto" onchange="toggleMotorMode()">
-            <option value="1">Produit A (1 Servo)</option>
-            <option value="2">Produit B (Servo + DC)</option>
+            <option value="1">Product A (1 Servo)</option>
+            <option value="2">Product B (Servo + DC)</option>
         </select>
     </div>
 
@@ -56,10 +56,10 @@
                 <label class="form-label fw-bold">Select Motor:</label>
                 <div class="btn-group" role="group">
                     <input type="radio" class="btn-check" name="motorSelect" id="m1" value="1" checked onchange="updateInterfaceForMotor()">
-                    <label class="btn btn-outline-primary" for="m1">Servo (Moteur 1)</label>
+                    <label class="btn btn-outline-primary" for="m1">Servo (Motor 1)</label>
 
                     <input type="radio" class="btn-check" name="motorSelect" id="m2" value="2" onchange="updateInterfaceForMotor()">
-                    <label class="btn btn-outline-primary" for="m2">DC Motor (Moteur 2)</label>
+                    <label class="btn btn-outline-primary" for="m2">DC Motor (Motor 2)</label>
                 </div>
             </div>
 
@@ -170,11 +170,11 @@
                 isConnected = true;
                 document.getElementById('connectionStatus').innerText = `Connected (${data.port})`;
                 document.getElementById('connectionStatus').className = "fw-bold text-success";
-                log("Succès : Arduino connecté.");
+                log("Arduino successfully connected.");
             } else {
-                log("Echec connexion : " + data.error);
+                log("Failed to connect " + data.error);
             }
-        } catch (e) { log("Erreur serveur : " + e); }
+        } catch (e) { log("Servor error : " + e); }
     }
 
     // --- 2. GESTION DE L'INTERFACE ---
@@ -184,11 +184,11 @@
         
         if (mode === "2") {
             selector.classList.remove('hidden');
-            log("Mode activé : Produit B (Servo + DC)");
+            log("Activated Mode : Product B (Servo + DC)");
         } else {
             selector.classList.add('hidden');
             document.getElementById('m1').checked = true;
-            log("Mode activé : Produit A (1 Servo)");
+            log("Activated Mode : Product A (1 Servo)");
         }
         updateInterfaceForMotor(); // Mise à jour de l'affichage
     }
@@ -245,7 +245,7 @@
 
     // --- 3. COMMANDES ---
     async function sendMove(val) {
-        if (!isConnected) { log("Erreur: Non connecté"); return; }
+        if (!isConnected) { log("Error: Not connected"); return; }
         
         const motorId = getSelectedMotor();
         try {
@@ -256,7 +256,7 @@
             });
             currentValue = val;
             document.getElementById('currentAngleDisplay').innerText = currentValue;
-        } catch (e) { log("Erreur envoi: " + e); }
+        } catch (e) { log("Sending error: " + e); }
     }
 
     function setMotorValue() {
@@ -269,7 +269,7 @@
 
     function resetZero() {
         stopScan();
-        log("Action: Arrêt / Reset à 0");
+        log("Action: Stop / Reset to 0");
         document.getElementById('targetValue').value = 0;
         sendMove(0);
     }
@@ -292,14 +292,14 @@
         const motorId = getSelectedMotor();
         const maxVal = motorId === 1 ? 180 : 255;
         
-        log("Scan / Auto démarré...");
+        log("Scan / Auto launched...");
         document.getElementById('stateDisplay').innerText = "RUNNING";
         
         scanInterval = setInterval(() => {
             let next = currentValue + step;
             if (next > maxVal) { 
                 next = motorId === 1 ? 0 : maxVal; 
-                log("Scan: boucle");
+                log("Scan: loop");
             }
             sendMove(next);
         }, timeMs);
