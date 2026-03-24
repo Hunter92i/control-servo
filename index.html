@@ -21,7 +21,7 @@
         <h2>Arduino Motor Controller</h2>
         <select id="productMode" class="form-select w-auto" onchange="toggleMotorMode()">
             <option value="1">Product A (1 Servo)</option>
-            <option value="2">Product B (Servo + DC)</option>
+            <option value="2">Product B (Servo + Stepper)</option>
         </select>
     </div>
 
@@ -59,31 +59,19 @@
                     <label class="btn btn-outline-primary" for="m1">Servo (Motor 1)</label>
 
                     <input type="radio" class="btn-check" name="motorSelect" id="m2" value="2" onchange="updateInterfaceForMotor()">
-                    <label class="btn btn-outline-primary" for="m2">DC Motor (Motor 2)</label>
+                    <label class="btn btn-outline-primary" for="m2">Stepper (Motor 2)</label>
                 </div>
             </div>
 
             <div class="row align-items-center">
                 <div class="col-auto">
-                    <label id="targetLabel" class="form-label fw-bold">Target angle (0–180°):</label>
+                    <label id="targetLabel" class="form-label fw-bold">Target absolute angle (0–180°):</label>
                 </div>
                 <div class="col">
-                    <input type="number" id="targetValue" class="form-control" value="0" min="0" max="180">
+                    <input type="number" id="targetValue" class="form-control" value="0">
                 </div>
                 <div class="col-auto">
-                    <button class="btn btn-light border" onclick="setMotorValue()">Send Command</button>
-                </div>
-            </div>
-
-            <div class="row align-items-center mt-3 hidden" id="dcAngleControl">
-                <div class="col-auto">
-                    <label class="form-label fw-bold text-primary">Target relative angle (°):</label>
-                </div>
-                <div class="col">
-                    <input type="number" id="dcTargetAngle" class="form-control" value="90" placeholder="Ex: 90 or -90">
-                </div>
-                <div class="col-auto">
-                    <button class="btn btn-primary" onclick="setRelativeAngleDC()">Run by Angle</button>
+                    <button class="btn btn-primary" onclick="setMotorValue()">Send Command</button>
                 </div>
             </div>
         </div>
@@ -108,7 +96,6 @@
             <button class="btn btn-outline-success" id="btnRun" onclick="startScan()">Run (Auto)</button>
             <button class="btn btn-outline-danger" id="btnStopScan" onclick="stopScan()">Stop Auto</button>
             <button class="btn btn-outline-secondary" id="btnStep" onclick="stepOnce()">Step once</button>
-            
             <button class="btn btn-outline-danger" onclick="resetZero()">Stop Motor / Reset to 0</button>
             <button class="btn btn-light border" onclick="log('Status refreshed')">Refresh state</button>
         </div>
@@ -141,7 +128,6 @@
         updateInterfaceForMotor();
     };
 
-    // --- 1. PORT MANAGEMENT ---
     async function scanPorts() {
         const select = document.getElementById('portSelect');
         select.innerHTML = '<option>Scanning...</option>';
@@ -189,14 +175,13 @@
         } catch (e) { log("Server error: " + e); }
     }
 
-    // --- 2. INTERFACE MANAGEMENT ---
     function toggleMotorMode() {
         const mode = document.getElementById('productMode').value;
         const selector = document.getElementById('motorSelectorDiv');
         
         if (mode === "2") {
             selector.classList.remove('hidden');
-            log("Mode activated: Product B (Servo + DC)");
+            log("Mode activated: Product B (Servo + Stepper)");
         } else {
             selector.classList.add('hidden');
             document.getElementById('m1').checked = true;
@@ -216,10 +201,8 @@
     function updateInterfaceForMotor() {
         const motorId = getSelectedMotor();
         
-        // UI Elements
         const label = document.getElementById('targetLabel');
         const input = document.getElementById('targetValue');
-        const dcAngleControl = document.getElementById('dcAngleControl');
         
         const scanCard = document.getElementById('scanCard');
         const btnRun = document.getElementById('btnRun');
@@ -228,37 +211,32 @@
 
         if (motorId === 1) {
             // --- SERVO MOTOR ---
-            label.innerText = "Target angle (0–180°):";
+            label.innerText = "Target absolute angle (0–180°):";
             input.min = 0;
             input.max = 180;
             if (input.value < 0) input.value = 0;
             if (input.value > 180) input.value = 180;
             
-            // Show Scan, Hide DC Control
             scanCard.classList.remove('hidden');
             btnRun.classList.remove('hidden');
             btnStopScan.classList.remove('hidden');
             btnStep.classList.remove('hidden');
-            dcAngleControl.classList.add('hidden');
             
         } else if (motorId === 2) {
-            // --- DC MOTOR ---
-            label.innerText = "Target speed (-255 to 255):";
-            input.min = -255;
-            input.max = 255;
+            // --- STEPPER MOTOR ---
+            label.innerText = "Target relative angle (e.g. 360 or -90°):";
+            input.removeAttribute('min');
+            input.removeAttribute('max');
             
-            // Hide Scan, Show DC Control
             scanCard.classList.add('hidden');
             btnRun.classList.add('hidden');
             btnStopScan.classList.add('hidden');
             btnStep.classList.add('hidden');
-            dcAngleControl.classList.remove('hidden');
             
-            stopScan(); // Safety feature
+            stopScan(); 
         }
     }
 
-    // --- 3. COMMANDS ---
     async function sendMove(val) {
         if (!isConnected) { log("Error: Not connected"); return; }
         
@@ -277,30 +255,18 @@
     function setMotorValue() {
         const val = parseInt(document.getElementById('targetValue').value);
         const motorId = getSelectedMotor();
-        const type = motorId === 1 ? "Angle" : "Speed";
-        log(`Action: Set ${type} to ${val}`);
+        
+        if (motorId === 1) {
+            log(`Action: Moving Servo to absolute angle ${val}°`);
+        } else {
+            log(`Action: Stepper turning by relative angle ${val}°`);
+        }
         sendMove(val);
-    }
-
-    // Special command for DC rotation logic
-    async function setRelativeAngleDC() {
-        if (!isConnected) { log("Error: Not connected"); return; }
-        
-        const targetAngleDC = parseInt(document.getElementById('dcTargetAngle').value);
-        log(`Action: Requesting DC rotation of ${targetAngleDC}°...`);
-        
-        try {
-            await fetch(`${API_URL}/move`, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ motor_id: 2, target_angle_dc: targetAngleDC }) 
-            });
-        } catch (e) { log("Error sending DC Angle: " + e); }
     }
 
     function resetZero() {
         stopScan();
-        log("Action: Stop / Reset to 0");
+        log("Action: Reset to 0");
         document.getElementById('targetValue').value = 0;
         sendMove(0);
     }
@@ -308,12 +274,11 @@
     function stepOnce() {
         const step = parseInt(document.getElementById('stepSize').value);
         const motorId = getSelectedMotor();
-        const maxVal = motorId === 1 ? 180 : 255;
-        
-        let next = currentValue + step;
-        if (next > maxVal) next = motorId === 1 ? 0 : maxVal;
-        
-        sendMove(next);
+        if (motorId === 1) {
+            let next = currentValue + step;
+            if (next > 180) next = 0;
+            sendMove(next);
+        }
     }
 
     function startScan() {
@@ -321,15 +286,14 @@
         const timeMs = parseInt(document.getElementById('stepTime').value);
         const step = parseInt(document.getElementById('stepSize').value);
         const motorId = getSelectedMotor();
-        const maxVal = motorId === 1 ? 180 : 255;
         
         log("Scan started...");
         document.getElementById('stateDisplay').innerText = "RUNNING";
         
         scanInterval = setInterval(() => {
             let next = currentValue + step;
-            if (next > maxVal) { 
-                next = motorId === 1 ? 0 : maxVal; 
+            if (motorId === 1 && next > 180) { 
+                next = 0; 
                 log("Scan: loop");
             }
             sendMove(next);
