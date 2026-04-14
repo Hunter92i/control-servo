@@ -292,7 +292,7 @@
         
         scanInterval = setInterval(() => {
             let next = currentValue + step;
-            if (motorId === 1 && next > 180) { 
+            if (motorId === 1 && (next > 90 || next <-90)) { 
                 next = 0; 
                 log("Scan: loop");
             }
