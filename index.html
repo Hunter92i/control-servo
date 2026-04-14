@@ -276,7 +276,7 @@
         const motorId = getSelectedMotor();
         if (motorId === 1) {
             let next = currentValue + step;
-            if (next > 180) next = 0;
+            if (next > 90 || next < -90) next = 0;
             sendMove(next);
         }
     }
