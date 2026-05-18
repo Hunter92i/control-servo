@@ -241,25 +241,36 @@
         if (!isConnected) { log("Error: Not connected"); return; }
         
         const motorId = getSelectedMotor();
+        // NEW: Get the currently selected product mode (1 or 2)
+        const productMode = document.getElementById('productMode').value;
+
         try {
-            await fetch(`${API_URL}/move`, {
+            const response = await fetch(`${API_URL}/move`, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ motor_id: motorId, angle: val }) 
+                // NEW: Pass product_mode in the request body
+                body: JSON.stringify({ motor_id: motorId, angle: val, product_mode: productMode }) 
             });
-            currentValue = val;
-            document.getElementById('currentAngleDisplay').innerText = currentValue;
+            const data = await response.json();
+            
+            if(data.status === "ok") {
+                currentValue = val;
+                document.getElementById('currentAngleDisplay').innerText = currentValue;
+            }
         } catch (e) { log("Send error: " + e); }
     }
 
     function setMotorValue() {
         const val = parseInt(document.getElementById('targetValue').value);
         const motorId = getSelectedMotor();
+        // NEW: Check mode for better UI logging
+        const mode = document.getElementById('productMode').value;
+        const modeText = mode === "1" ? "[Product A]" : "[Product B]";
         
         if (motorId === 1) {
-            log(`Action: Moving Servo to absolute angle ${val}°`);
+            log(`Action ${modeText}: Moving Servo to absolute angle ${val}°`);
         } else {
-            log(`Action: Stepper turning by relative angle ${val}°`);
+            log(`Action ${modeText}: Stepper turning by relative angle ${val}°`);
         }
         sendMove(val);
     }
@@ -287,7 +298,10 @@
         const step = parseInt(document.getElementById('stepSize').value);
         const motorId = getSelectedMotor();
         
-        log("Scan started...");
+        const mode = document.getElementById('productMode').value;
+        const modeText = mode === "1" ? "Product A" : "Product B";
+
+        log(`Scan started on ${modeText}...`);
         document.getElementById('stateDisplay').innerText = "RUNNING";
         
         scanInterval = setInterval(() => {
